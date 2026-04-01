@@ -2,10 +2,14 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import fs from "fs";
-import pdf from "pdf-parse";
+
 import mammoth from "mammoth";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
+const pdf = require("pdf-parse");
 
 dotenv.config();
 
