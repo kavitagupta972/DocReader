@@ -4,21 +4,19 @@ import cors from "cors";
 import fs from "fs";
 import pdf from "pdf-parse";
 import mammoth from "mammoth";
-import AWS from "aws-sdk";
+import OpenAI from "openai";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-// 🔐 Configure AWS Polly
-AWS.config.update({
-  accessKeyId: "YOUR_AWS_ACCESS_KEY",
-  secretAccessKey: "YOUR_AWS_SECRET",
-  region: "ap-south-1",
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
-
-const polly = new AWS.Polly();
 
 // 📄 Extract text
 async function extractText(filePath, mimetype) {
@@ -40,15 +38,21 @@ async function extractText(filePath, mimetype) {
   return "";
 }
 
-// 🔊 Convert text to speech
-function textToSpeech(text) {
-  const params = {
-    OutputFormat: "mp3",
-    Text: text.substring(0, 3000), // limit
-    VoiceId: "Aditi", // Hinglish support
-  };
+// 🔊 Convert text → speech using OpenAI
+async function textToSpeech(text) {
+  const response = await client.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text.substring(0, 3000), // limit for MVP
+  });
 
-  return polly.synthesizeSpeech(params).promise();
+  const audioPath = `audio-${Date.now()}.mp3`;
+
+  // Convert to buffer
+  const buffer = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(audioPath, buffer);
+
+  return audioPath;
 }
 
 // 🚀 API
@@ -60,14 +64,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "Text extraction failed" });
     }
 
-    const audio = await textToSpeech(text);
-
-    const audioPath = `audio-${Date.now()}.mp3`;
-    fs.writeFileSync(audioPath, audio.AudioStream);
+    const audioPath = await textToSpeech(text);
 
     res.json({
       audioUrl: `http://localhost:5000/${audioPath}`,
-      text: text.substring(0, 500), // preview
+      text: text.substring(0, 500),
     });
   } catch (err) {
     console.error(err);
